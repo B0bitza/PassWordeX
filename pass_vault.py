@@ -1,3 +1,4 @@
+import random
 import sqlite3, hashlib
 from tkinter import *
 from tkinter import simpledialog
@@ -22,46 +23,59 @@ kdf = PBKDF2HMAC(
 
 encryptionKey = 0
 
+
 def encrypt(message: bytes, key: bytes) -> bytes:
     return Fernet(key).encrypt(message)
+
 
 def decrypt(message: bytes, token: bytes) -> bytes:
     return Fernet(token).decrypt(message)
 
 
-#database code
-with sqlite3.connect('password_vault.db') as db:
+# database code
+with sqlite3.connect('password_vault.kdbx') as db:
     cursor = db.cursor()
 
-cursor.execute("CREATE TABLE IF NOT EXISTS masterpassword(id INTEGER PRIMARY KEY,password TEXT NOT NULL, recoveryKey TEXT NOT NULL);")
+cursor.execute(
+    "CREATE TABLE IF NOT EXISTS masterpassword(id INTEGER PRIMARY KEY,password TEXT NOT NULL, recoveryKey TEXT NOT NULL);")
 
-cursor.execute("CREATE TABLE IF NOT EXISTS vault(id INTEGER PRIMARY KEY,website TEXT NOT NULL,username TEXT NOT NULL,password TEXT NOT NULL);")
+cursor.execute(
+    "CREATE TABLE IF NOT EXISTS vault(id INTEGER PRIMARY KEY,website TEXT NOT NULL,username TEXT NOT NULL,password TEXT NOT NULL);")
 
-#Create PopUp
+
+# Create PopUp
 def popUp(text):
     answer = simpledialog.askstring("Introdu datele", text)
     return answer
 
-#Initiate window
+
+# Initiate window
+
 window = Tk()
 window.update()
+window.title("PassWordeX")
+window.geometry("300x150")
+window.resizable(0, 0)
+window.update_idletasks()
+x = (window.winfo_screenwidth() - window.winfo_reqwidth()) / 2
+y = (window.winfo_screenheight() - window.winfo_reqheight()) / 2
+window.geometry("+%d+%d" % (x, y))
 
-window.title("Password Vault")
 
 def hashPassword(input):
     hash1 = hashlib.sha256(input)
     hash1 = hash1.hexdigest()
-
     return hash1
+
 
 def firstTimeScreen():
     cursor.execute('DELETE FROM vault')
-        
+
     for widget in window.winfo_children():
         widget.destroy()
 
     window.geometry('300x150')
-    lbl = Label(window, text="Choose a Master Password")
+    lbl = Label(window, text="Alege parola de tip master")
     lbl.config(anchor=CENTER)
     lbl.pack()
 
@@ -69,7 +83,7 @@ def firstTimeScreen():
     txt.pack()
     txt.focus()
 
-    lbl1 = Label(window, text="Re-enter password")
+    lbl1 = Label(window, text="Re-introdu parola de tip master")
     lbl1.config(anchor=CENTER)
     lbl1.pack()
 
@@ -88,7 +102,7 @@ def firstTimeScreen():
 
             global encryptionKey
             encryptionKey = base64.urlsafe_b64encode(kdf.derive(txt.get().encode()))
-            
+
             insert_password = """INSERT INTO masterpassword(password, recoveryKey)
             VALUES(?, ?) """
             cursor.execute(insert_password, ((hashedPassword), (recoveryKey)))
@@ -96,17 +110,18 @@ def firstTimeScreen():
 
             recoveryScreen(key)
         else:
-            lbl.config(text="Passwords dont match")
+            lbl.config(text="Parolele nu se potrivesc")
 
-    btn = Button(window, text="Save", command=savePassword)
+    btn = Button(window, text="Salvează", command=savePassword)
     btn.pack(pady=5)
+
 
 def recoveryScreen(key):
     for widget in window.winfo_children():
         widget.destroy()
 
     window.geometry('300x150')
-    lbl = Label(window, text="Save this key to be able to recover account")
+    lbl = Label(window, text="Salvează această cheie pentru a putea reseta parola")
     lbl.config(anchor=CENTER)
     lbl.pack()
 
@@ -118,21 +133,22 @@ def recoveryScreen(key):
         window.clipboard_clear()
         window.clipboard_append(key)
 
-    btn = Button(window, text="Copy Key", command=copyKey)
+    btn = Button(window, text="Copiază cheia", command=copyKey)
     btn.pack(pady=5)
 
     def done():
         vaultScreen()
 
-    btn = Button(window, text="Done", command=done)
+    btn = Button(window, text="Continuă", command=done)
     btn.pack(pady=5)
+
 
 def resetScreen():
     for widget in window.winfo_children():
         widget.destroy()
 
     window.geometry('300x150')
-    lbl = Label(window, text="Enter Recovery Key")
+    lbl = Label(window, text="Introdu cheia de recuperare")
     lbl.config(anchor=CENTER)
     lbl.pack()
 
@@ -156,10 +172,11 @@ def resetScreen():
             firstTimeScreen()
         else:
             txt.delete(0, 'end')
-            lbl1.config(text='Wrong Key')
+            lbl1.config(text='Cheie greșită')
 
-    btn = Button(window, text="Check Key", command=checkRecoveryKey)
+    btn = Button(window, text="Verifică cheia", command=checkRecoveryKey)
     btn.pack(pady=5)
+
 
 def loginScreen():
     for widget in window.winfo_children():
@@ -167,7 +184,7 @@ def loginScreen():
 
     window.geometry('300x150')
 
-    lbl = Label(window, text="Enter Master Password")
+    lbl = Label(window, text="Introdu parola master")
     lbl.config(anchor=CENTER)
     lbl.pack()
 
@@ -196,16 +213,24 @@ def loginScreen():
             vaultScreen()
         else:
             txt.delete(0, 'end')
-            lbl1.config(text="Wrong Password")
-    
+            lbl1.config(text="Parola gresita")
+
     def resetPassword():
         resetScreen()
 
-    btn = Button(window, text="Submit", command=checkPassword)
+    btn = Button(window, text="Enter", command=checkPassword)
     btn.pack(pady=5)
 
-    btn = Button(window, text="Reset Password", command=resetPassword)
+    btn = Button(window, text="Resetează parola", command=resetPassword)
     btn.pack(pady=5)
+
+
+# password generator
+def generatePassword():
+    password = ""
+    for i in range(0, 15):
+        password += chr(random.randint(33, 126))
+    return password
 
 
 def vaultScreen():
@@ -216,35 +241,44 @@ def vaultScreen():
         text1 = "Website"
         text2 = "Username"
         text3 = "Password"
-        website = encrypt(popUp(text1).encode(), encryptionKey)
-        username = encrypt(popUp(text2).encode(), encryptionKey)
-        password = encrypt(popUp(text3).encode(), encryptionKey)
-
-        insert_fields = "INSERT INTO vault(website, username, password) VALUES(?, ?, ?)"
-        cursor.execute(insert_fields, (website, username, password))
-        db.commit()
-
-        vaultScreen()
+        website = encrypt(simpledialog.askstring("Input", text1, parent=window).encode('utf-8'), encryptionKey)
+        username = encrypt(simpledialog.askstring("Input", text2, parent=window).encode('utf-8'), encryptionKey)
+        password = encrypt(generatePassword().encode('utf-8'), encryptionKey)
+        if website and username and password:
+            insert_password = """INSERT INTO vault(website, username, password)
+            VALUES(?, ?, ?) """
+            cursor.execute(insert_password, ((website), (username), (password)))
+            db.commit()
+            vaultScreen()
+        else:
+            vaultScreen()
 
     def removeEntry(input):
         cursor.execute("DELETE FROM vault WHERE id = ?", (input,))
         db.commit()
         vaultScreen()
 
-    window.geometry('1000x750')
+    window.geometry('1100x800')
     window.resizable(height=None, width=None)
-    lbl = Label(window, text="Password Vault")
-    lbl.grid(column=1)
+    window.update_idletasks()
+    width = window.winfo_width()
+    height = window.winfo_height()
+    x = (window.winfo_screenwidth() // 2) - (width // 2)
+    y = (window.winfo_screenheight() // 2) - (height // 2)
+    window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
+
+    lbl = Label(window, text="Date de autentificare")
+    lbl.grid(columnspan=20, padx=80)
 
     btn = Button(window, text="+", command=addEntry)
-    btn.grid(column=1, pady=10)
+    btn.grid(columnspan=20, padx=80)
 
     lbl = Label(window, text="Website")
     lbl.grid(row=2, column=0, padx=80)
-    lbl = Label(window, text="Username")
-    lbl.grid(row=2, column=1, padx=80)
-    lbl = Label(window, text="Password")
-    lbl.grid(row=2, column=3, padx=80)
+    lbl = Label(window, text="Nume utilizator")
+    lbl.grid(row=2, column=2, padx=80)
+    lbl = Label(window, text="Parola")
+    lbl.grid(row=2, column=4, padx=80)
 
     cursor.execute('SELECT * FROM vault')
     if (cursor.fetchall() != None):
@@ -255,35 +289,42 @@ def vaultScreen():
 
             if (len(array) == 0):
                 break
+
+            def copyWebsite(input):
+                window.clipboard_clear()
+                window.clipboard_append(decrypt(input, encryptionKey))
+
             lbl1 = Label(window, text=(decrypt(array[i][1], encryptionKey)), font=("Helvetica", 12))
-            lbl1.grid(column=0, row=(i+3))
+            lbl1.grid(column=0, row=(i + 3))
+            btn = Button(window, text="Copy Website", command=partial(copyWebsite, array[i][1]))
+            btn.grid(column=1, row=(i + 3), pady=5)
 
             def copyUsername(input):
                 window.clipboard_clear()
                 window.clipboard_append(decrypt(input, encryptionKey))
 
             lbl2 = Label(window, text=(decrypt(array[i][2], encryptionKey)), font=("Helvetica", 12))
-            lbl2.grid(column=1, row=(i+3))
-            btn = Button(window, text="Copy Username", command=partial(copyUsername, array[i][2]))
-            btn.grid(column=2, row=(i+3), pady=5)
+            lbl2.grid(column=2, row=(i + 3))
+            btn = Button(window, text="Copiază Nume Utilizator", command=partial(copyUsername, array[i][2]))
+            btn.grid(column=3, row=(i + 3), pady=5)
             lbl3 = Label(window, text="*****", font=("Helvetica", 12))
-            lbl3.grid(column=3, row=(i+3))
+            lbl3.grid(column=4, row=(i + 3))
 
             def copyPassword(input):
                 window.clipboard_clear()
                 window.clipboard_append(decrypt(input, encryptionKey))
-            btn = Button(window, text="Copy Password", command=partial(copyPassword, array[i][3]))
-            btn.grid(column=4, row=(i+3), pady=5)
 
+            btn = Button(window, text="Copiază parola", command=partial(copyPassword, array[i][3]))
+            btn.grid(column=5, row=(i + 3), pady=5)
 
-            btn = Button(window, text="Delete Line", command=partial(removeEntry, array[i][0]))
-            btn.grid(column=5, row=(i+3), pady=5)
-
-            i+=1
+            btn = Button(window, text="Șterge Linia", command=partial(removeEntry, array[i][0]))
+            btn.grid(column=6, row=(i + 3), pady=5)
+            i += 1
 
             cursor.execute('SELECT * FROM vault')
             if (len(cursor.fetchall()) <= i):
                 break
+
 
 cursor.execute('SELECT * FROM masterpassword')
 if (cursor.fetchall()):
